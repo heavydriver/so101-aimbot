@@ -1,0 +1,42 @@
+# Tuned on a camera recording of a monitor running Gridshot (see clips/).
+# Target sizes and the crosshair kernel are in warped-pixel units at reference_height.
+
+warp_width: 960
+warp_height: 540
+reference_height: 540
+
+# Monitor is the large dark region against a brighter desk. Raise this if the
+# screen is clipped; lower it if the bezel or wall gets pulled in.
+screen_max_value: 130
+screen_min_area_ratio: 0.25
+
+# Optional manual corners in raw camera pixels, ordered TL, TR, BR, BL.
+# game_corners:
+#   - [146, 51]
+#   - [1825, 61]
+#   - [1879, 988]
+#   - [132, 1049]
+
+target_hsv_lower: [128, 40, 70]
+target_hsv_upper: [172, 255, 255]
+blur_ksize: 5
+morph_ksize: 5
+close_ksize: 11
+# Warped frames brighter than this (median V) are menus, not the grid.
+max_scene_value: 165
+min_target_radius_px: 7.0
+max_target_radius_px: 28.0
+min_peak_separation_px: 18.0
+border_margin_px: 8
+max_targets: 6
+
+# Crosshair: a compact white plus. Scores are on a whiteness image so purple
+# sphere highlights (high saturation) do not win.
+cursor_sat_max: 50
+cursor_whiteness_min: 140
+cursor_shape_min: 60
+cursor_compact_min: 80
+cursor_score_min: 11000
+cursor_top_ignore_px: 40
+
+click_threshold_px: 12.0

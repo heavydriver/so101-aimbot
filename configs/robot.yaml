@@ -1,0 +1,6 @@
+# SO-101 and mouse-attachment parameters (filled in as hardware is calibrated).
+home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+joint_limits_rad:
+  min: [-3.14, -3.14, -3.14, -3.14, -3.14, -3.14]
+  max: [3.14, 3.14, 3.14, 3.14, 3.14, 3.14]
+mouse_pad_contact_z_m: 0.0
