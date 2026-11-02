@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 from so101_aimbot.planning.calibrate import pixel_delta_to_mouse_mm
+from so101_aimbot.planning.pad_geometry import polar_to_xy_mm, plan_polar_segments
 from so101_aimbot.types import CursorState, MouseCommand, Target
+
+__all__ = [
+    "plan_mouse_command",
+    "polar_to_xy_mm",
+    "plan_polar_segments",
+]
 
 
 def plan_mouse_command(

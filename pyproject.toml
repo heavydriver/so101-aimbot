@@ -5,9 +5,15 @@ description = "SO-101 robotic arm playing Gridshot via perception â†’ planning â
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "jax>=0.12.0.1",
+    "jaxlib>=0.12.0.1",
+    "lerobot[feetech]>=0.4.4",
     "numpy>=2.5.3",
     "opencv-python>=5.0.0.93",
+    "pyroki",
     "pyyaml>=6.0",
+    "ruckig>=0.19.4",
+    "yourdfpy>=0.0.60",
 ]
 
 [build-system]
@@ -19,6 +25,9 @@ packages = ["src/so101_aimbot"]
 
 [tool.uv]
 package = true
+
+[tool.uv.sources]
+pyroki = { git = "https://github.com/chungmin99/pyroki.git" }
 
 [dependency-groups]
 dev = [

@@ -1,6 +1,84 @@
-# SO-101 and mouse-attachment parameters (filled in as hardware is calibrated).
-home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+port: /dev/ttyACM0
+dry_run: false
+robot_id: team-11
+urdf_path: assets/so101/so101_new_calib.urdf
+target_link: gripper_frame_link
+home_joints:
+- -0.9230769230769231
+- 35.824175824175825
+- 54.505494505494504
+- -82.94505494505495
+- -1.6263736263736264
+- 9.5
 joint_limits_rad:
-  min: [-3.14, -3.14, -3.14, -3.14, -3.14, -3.14]
-  max: [3.14, 3.14, 3.14, 3.14, 3.14, 3.14]
-mouse_pad_contact_z_m: 0.0
+  min:
+  - -3.14
+  - -3.14
+  - -3.14
+  - -3.14
+  - -0.25
+  - -3.14
+  max:
+  - 3.14
+  - 3.14
+  - 3.14
+  - 3.14
+  - 0.25
+  - 3.14
+max_radius_mm: 150.0
+mouse_pad_contact_z_m: 0.02826547808945179
+lift_clearance_m: 0.05
+z_lift_m: 0.07826547808945179
+tip_wxyz:
+- -0.6593894958496094
+- -0.022887427359819412
+- -0.7508236765861511
+- -0.03074619174003601
+pad_x_axis:
+- 1.0
+- 0.0
+- 0.0
+pad_y_axis:
+- 0.0
+- 1.0
+- 0.0
+control_dt_s: 0.01
+ruckig:
+  slide:
+    max_velocity_mps:
+    - 0.08
+    - 0.08
+    max_acceleration_mps2:
+    - 0.4
+    - 0.4
+    max_jerk_mps3:
+    - 2.0
+    - 2.0
+  lift:
+    max_velocity_mps:
+    - 0.05
+    max_acceleration_mps2:
+    - 0.25
+    max_jerk_mps3:
+    - 1.0
+  air:
+    max_velocity_mps:
+    - 0.1
+    - 0.1
+    max_acceleration_mps2:
+    - 0.5
+    - 0.5
+    max_jerk_mps3:
+    - 2.5
+    - 2.5
+gripper:
+  open: 10.785714285714286
+  closed: 0.35
+  click_hold_s: 0.25
+position_tolerance_mm: 0.8
+joint_tolerance_deg: 3.0
+gripper_tolerance: 2.0
+settle_timeout_s: 8.0
+settle_poll_s: 0.02
+settle_vel_tol_deg: 0.4
+settle_stable_reads: 3
