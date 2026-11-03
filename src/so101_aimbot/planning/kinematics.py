@@ -1,4 +1,4 @@
-"""SO-101 forward / inverse kinematics via PyRoki."""
+"""Forward and inverse kinematics for the four moving SO-101 arm joints."""
 
 from __future__ import annotations
 
@@ -6,68 +6,43 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-import jax.numpy as jnp
-import jax_dataclasses as jdc
-import jaxlie
-import jaxls
 import numpy as np
-import pyroki as pk
-import yourdfpy
+import pinocchio as pin
 from numpy.typing import NDArray
 
 from so101_aimbot.config import REPO_ROOT
 
-# PyRoki actuated order for so101_new_calib.urdf (topo-sorted).
-PYROKI_ACTUATED_NAMES = (
-    "gripper",
-    "wrist_roll",
-    "wrist_flex",
-    "elbow_flex",
-    "shoulder_lift",
-    "shoulder_pan",
-)
-
-# LeRobot / project joint order.
-PROJECT_JOINT_NAMES = (
+ACTIVE_JOINTS = (
     "shoulder_pan",
     "shoulder_lift",
     "elbow_flex",
     "wrist_flex",
-    "wrist_roll",
-    "gripper",
 )
+ARM_JOINTS = ACTIVE_JOINTS + ("wrist_roll",)
+LOCKED_JOINTS = ("wrist_roll", "gripper")
 
 
-def _project_to_pyroki(q_project: NDArray[np.floating]) -> NDArray[np.float64]:
-    idx = {name: i for i, name in enumerate(PROJECT_JOINT_NAMES)}
-    return np.array([q_project[idx[name]] for name in PYROKI_ACTUATED_NAMES], dtype=np.float64)
-
-
-def _pyroki_to_project(q_pyroki: NDArray[np.floating]) -> NDArray[np.float64]:
-    idx = {name: i for i, name in enumerate(PYROKI_ACTUATED_NAMES)}
-    return np.array([q_pyroki[idx[name]] for name in PROJECT_JOINT_NAMES], dtype=np.float64)
-
-
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class EndEffectorPose:
-    """Tip pose in robot base frame."""
+    """End-effector pose in the robot base frame."""
 
-    position_m: NDArray[np.float64]  # (3,)
-    wxyz: NDArray[np.float64]  # (4,)
+    position_mm: NDArray[np.float64]
+    rotation: NDArray[np.float64]
 
-    @property
-    def xyz(self) -> NDArray[np.float64]:
-        return self.position_m
+
+class IKError(RuntimeError):
+    """Raised when the requested end-effector position is unreachable."""
 
 
 class So101Kinematics:
-    """PyRoki FK/IK wrapper for the SO-101."""
+    """Small Pinocchio wrapper with wrist-roll and gripper locked."""
 
     def __init__(
         self,
         urdf_path: str | Path,
+        home_arm_deg: Sequence[float],
         *,
-        target_link: str = "gripper_frame_link",
+        target_frame: str = "gripper_frame_link",
     ) -> None:
         path = Path(urdf_path)
         if not path.is_absolute():
@@ -75,162 +50,117 @@ class So101Kinematics:
         if not path.is_file():
             raise FileNotFoundError(f"URDF not found: {path}")
 
-        urdf = yourdfpy.URDF.load(
-            str(path),
-            load_meshes=False,
-            build_scene_graph=True,
-        )
-        self._robot = pk.Robot.from_urdf(urdf)
-        self._target_link = target_link
-        if target_link not in self._robot.links.names:
-            raise ValueError(
-                f"target_link {target_link!r} not in {self._robot.links.names}"
-            )
-        self._target_link_index = self._robot.links.names.index(target_link)
-        self._ik_compiled = False
+        home = _vector(home_arm_deg, len(ARM_JOINTS), "home_arm_deg")
+        full_model = pin.buildModelFromUrdf(str(path))
+        reference = pin.neutral(full_model)
+        for name, angle_deg in zip(ARM_JOINTS, home, strict=True):
+            reference[_joint_q_index(full_model, name)] = np.deg2rad(angle_deg)
 
-    @property
-    def robot(self) -> pk.Robot:
-        return self._robot
+        locked_ids = [_joint_id(full_model, name) for name in LOCKED_JOINTS]
+        self.model = pin.buildReducedModel(full_model, locked_ids, reference)
+        self.data = self.model.createData()
+        self._q_indices = [_joint_q_index(self.model, name) for name in ACTIVE_JOINTS]
+        self._frame_id = self.model.getFrameId(target_frame)
+        if self._frame_id >= self.model.nframes:
+            raise ValueError(f"Unknown target frame: {target_frame!r}")
 
-    @property
-    def target_link(self) -> str:
-        return self._target_link
+        self.lower_deg = np.rad2deg(self.model.lowerPositionLimit[self._q_indices])
+        self.upper_deg = np.rad2deg(self.model.upperPositionLimit[self._q_indices])
+        self.home_active_deg = home[: len(ACTIVE_JOINTS)].copy()
+        self.home_pose = self.forward(self.home_active_deg)
 
-    def forward_kinematics(self, joints_rad_project: Sequence[float]) -> EndEffectorPose:
-        """Map project-order joint radians → tip pose (wxyz + xyz metres)."""
-        q = np.asarray(joints_rad_project, dtype=np.float64).reshape(6)
-        q_pk = _project_to_pyroki(q)
-        link_poses = np.asarray(self._robot.forward_kinematics(q_pk))
-        pose7 = link_poses[self._target_link_index]
+    def forward(self, active_deg: Sequence[float]) -> EndEffectorPose:
+        """Compute the end-effector pose from four joint angles in degrees."""
+        q = self._configuration(active_deg)
+        pin.framesForwardKinematics(self.model, self.data, q)
+        pose = self.data.oMf[self._frame_id]
         return EndEffectorPose(
-            position_m=np.asarray(pose7[4:7], dtype=np.float64).copy(),
-            wxyz=np.asarray(pose7[0:4], dtype=np.float64).copy(),
+            position_mm=np.asarray(pose.translation * 1000.0, dtype=float).copy(),
+            rotation=np.asarray(pose.rotation, dtype=float).copy(),
         )
 
-    def inverse_kinematics(
+    def inverse(
         self,
-        position_m: Sequence[float],
-        wxyz: Sequence[float],
+        position_mm: Sequence[float],
         *,
-        guess_rad_project: Sequence[float] | None = None,
-        pos_weight: float = 50.0,
-        ori_weight: float = 10.0,
-        rest_weight: float = 1.0,
+        initial_deg: Sequence[float],
+        preferred_rotation: NDArray[np.float64] | None = None,
+        tolerance_mm: float = 0.5,
+        max_iterations: int = 200,
     ) -> list[float]:
-        """Solve IK for tip pose; returns project-order joint radians (6)."""
-        target_pos = np.asarray(position_m, dtype=np.float64).reshape(3)
-        target_wxyz = np.asarray(wxyz, dtype=np.float64).reshape(4)
-        if guess_rad_project is None:
-            mid = 0.5 * (
-                np.asarray(self._robot.joints.lower_limits)
-                + np.asarray(self._robot.joints.upper_limits)
+        """Solve position IK, softly preferring the supplied orientation."""
+        target = _vector(position_mm, 3, "position_mm") / 1000.0
+        q = self._configuration(initial_deg)
+        preferred = (
+            self.home_pose.rotation
+            if preferred_rotation is None
+            else np.asarray(preferred_rotation, dtype=float).reshape(3, 3)
+        )
+
+        for _ in range(max_iterations):
+            pin.framesForwardKinematics(self.model, self.data, q)
+            pose = self.data.oMf[self._frame_id]
+            position_error = target - pose.translation
+            if np.linalg.norm(position_error) * 1000.0 <= tolerance_mm:
+                return self._degrees(q)
+
+            jacobian = pin.computeFrameJacobian(
+                self.model,
+                self.data,
+                q,
+                self._frame_id,
+                pin.ReferenceFrame.LOCAL_WORLD_ALIGNED,
             )
-            guess_pk = np.asarray(mid, dtype=np.float64)
-        else:
-            guess_pk = _project_to_pyroki(
-                np.asarray(guess_rad_project, dtype=np.float64).reshape(6)
+            rotation_error = pose.rotation @ pin.log3(pose.rotation.T @ preferred)
+
+            # Millimetres make translation dominate this soft preference.
+            orientation_weight = 0.1
+            system = np.vstack(
+                (jacobian[:3] * 1000.0, jacobian[3:] * orientation_weight)
             )
+            error = np.concatenate(
+                (position_error * 1000.0, rotation_error * orientation_weight)
+            )
+            damping = 1e-4
+            step = system.T @ np.linalg.solve(
+                system @ system.T + damping * np.eye(6), error
+            )
+            q = pin.integrate(self.model, q, 0.6 * step)
+            q = np.clip(q, self.model.lowerPositionLimit, self.model.upperPositionLimit)
 
-        cfg_pk = _solve_ik(
-            self._robot,
-            self._target_link_index,
-            target_wxyz,
-            target_pos,
-            guess_pk,
-            pos_weight=pos_weight,
-            ori_weight=ori_weight,
-            rest_weight=rest_weight,
-        )
-        self._ik_compiled = True
-        return _pyroki_to_project(cfg_pk).tolist()
-
-    def warm_up(self, guess_rad_project: Sequence[float] | None = None) -> None:
-        """Trigger JAX JIT compile with a throwaway IK solve."""
-        pose = self.forward_kinematics(
-            guess_rad_project
-            if guess_rad_project is not None
-            else [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        )
-        self.inverse_kinematics(
-            pose.position_m,
-            pose.wxyz,
-            guess_rad_project=guess_rad_project,
+        final = self.forward(self._degrees(q)).position_mm
+        final_error = np.linalg.norm(final - target * 1000.0)
+        raise IKError(
+            f"IK failed to reach target within {tolerance_mm:.2f} mm "
+            f"(error={final_error:.2f} mm)"
         )
 
+    def _configuration(self, active_deg: Sequence[float]) -> NDArray[np.float64]:
+        values = _vector(active_deg, len(ACTIVE_JOINTS), "active_deg")
+        q = pin.neutral(self.model)
+        q[self._q_indices] = np.deg2rad(values)
+        return q
 
-def inverse_kinematics(target_xyz: Sequence[float]) -> list[float]:
-    """Backward-compatible stub API: position-only IK with identity orientation."""
-    kin = So101Kinematics(REPO_ROOT / "assets" / "so101" / "so101_new_calib.urdf")
-    return kin.inverse_kinematics(target_xyz, [1.0, 0.0, 0.0, 0.0])
-
-
-@jdc.jit
-def _solve_ik_jax(
-    robot: pk.Robot,
-    target_link_index: jnp.ndarray,
-    target_wxyz: jnp.ndarray,
-    target_position: jnp.ndarray,
-    rest_cfg: jnp.ndarray,
-    pos_weight: float,
-    ori_weight: float,
-    rest_weight: float,
-) -> jnp.ndarray:
-    joint_var = robot.joint_var_cls(0)
-    costs = [
-        pk.costs.pose_cost_analytic_jac(
-            robot,
-            joint_var,
-            jaxlie.SE3.from_rotation_and_translation(
-                jaxlie.SO3(target_wxyz), target_position
-            ),
-            target_link_index,
-            pos_weight=pos_weight,
-            ori_weight=ori_weight,
-        ),
-        pk.costs.limit_cost(
-            robot,
-            joint_var,
-            weight=100.0,
-        ),
-        pk.costs.rest_cost(
-            joint_var,
-            rest_cfg,
-            weight=rest_weight,
-        ),
-    ]
-    sol = (
-        jaxls.LeastSquaresProblem(costs=costs, variables=[joint_var])
-        .analyze()
-        .solve(
-            initial_vals=jaxls.VarValues.make([joint_var.with_value(rest_cfg)]),
-            verbose=False,
-            linear_solver="dense_cholesky",
-            trust_region=jaxls.TrustRegionConfig(lambda_initial=1.0),
-        )
-    )
-    return sol[joint_var]
+    def _degrees(self, q: NDArray[np.floating]) -> list[float]:
+        return np.rad2deg(np.asarray(q)[self._q_indices]).tolist()
 
 
-def _solve_ik(
-    robot: pk.Robot,
-    target_link_index: int,
-    target_wxyz: NDArray[np.floating],
-    target_position: NDArray[np.floating],
-    rest_cfg: NDArray[np.floating],
-    *,
-    pos_weight: float,
-    ori_weight: float,
-    rest_weight: float,
-) -> NDArray[np.float64]:
-    cfg = _solve_ik_jax(
-        robot,
-        jnp.array(target_link_index),
-        jnp.asarray(target_wxyz, dtype=jnp.float32),
-        jnp.asarray(target_position, dtype=jnp.float32),
-        jnp.asarray(rest_cfg, dtype=jnp.float32),
-        float(pos_weight),
-        float(ori_weight),
-        float(rest_weight),
-    )
-    return np.asarray(cfg, dtype=np.float64)
+def _joint_id(model: pin.Model, name: str) -> int:
+    joint_id = model.getJointId(name)
+    if joint_id == 0:
+        raise ValueError(f"URDF is missing joint {name!r}")
+    return joint_id
+
+
+def _joint_q_index(model: pin.Model, name: str) -> int:
+    joint = model.joints[_joint_id(model, name)]
+    if joint.nq != 1:
+        raise ValueError(f"Expected one-DOF joint {name!r}, got nq={joint.nq}")
+    return joint.idx_q
+
+
+def _vector(values: Sequence[float], size: int, name: str) -> NDArray[np.float64]:
+    vector = np.asarray(values, dtype=float).reshape(-1)
+    if vector.size != size:
+        raise ValueError(f"{name} must contain {size} values")
+    return vector

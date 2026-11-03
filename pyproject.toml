@@ -5,15 +5,11 @@ description = "SO-101 robotic arm playing Gridshot via perception â†’ planning â
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "jax>=0.12.0.1",
-    "jaxlib>=0.12.0.1",
     "lerobot[feetech]>=0.4.4",
-    "numpy>=2.5.3",
     "opencv-python>=5.0.0.93",
-    "pyroki",
     "pyyaml>=6.0",
     "ruckig>=0.19.4",
-    "yourdfpy>=0.0.60",
+    "numpy>=2.0,<2.3"
 ]
 
 [build-system]
@@ -23,13 +19,35 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/so101_aimbot"]
 
-[tool.uv]
-package = true
-
-[tool.uv.sources]
-pyroki = { git = "https://github.com/chungmin99/pyroki.git" }
-
 [dependency-groups]
 dev = [
     "pytest>=8.0",
 ]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[tool.pixi.dependencies]
+python = "3.12.*"
+pinocchio = ">=4.1.0,<5"
+
+[tool.pixi.constraints]
+numpy = ">=2.0,<2.3"
+
+[tool.pixi.pypi-dependencies]
+so101-aimbot = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+
+[tool.pixi.environments.dev]
+features = ["dev"]
+solve-group = "default"
+
+[tool.pixi.environments.dev.tasks]
+test = "pytest"
+
+[tool.pixi.tasks]
+main = "python main.py"
+perception = "python scripts/run_perception.py"

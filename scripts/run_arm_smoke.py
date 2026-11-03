@@ -2,44 +2,40 @@
 
 from __future__ import annotations
 
-from so101_aimbot.control import ArmController, PadMouseController
+import argparse
+
+from so101_aimbot.control import ArmController, MouseController
 from so101_aimbot.config import load_config
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
     cfg = load_config("robot")
+    if args.dry_run:
+        cfg.update(dry_run=True, port=None)
     arm = ArmController(cfg)
-    pad = PadMouseController(arm, config=cfg)
-    pad.connect(warm_up_ik=True)
+    mouse = MouseController(arm, config=cfg)
+    mouse.connect()
     try:
         arm.home()
         print(
             f"Connected (dry_run={arm.dry_run}) "
-            f"home_pad_xy={pad.current_pad_xy_mm()} "
-            f"max_radius_mm={pad.max_radius_mm}"
+            f"home_pad_xy={mouse.current_pad_xy_mm()} "
+            f"max_radius_mm={mouse.max_radius_mm}"
         )
 
         print("Short move_polar(10 mm, 0 deg)…")
-        pad.move_polar(50.0, 90.0)
-        print(f"  pad_xy={pad.current_pad_xy_mm()}")
-        
-        pad.move_polar(20.0, -40.0)
-        print(f"  pad_xy={pad.current_pad_xy_mm()}")
-        
-        pad.move_polar(20.0, 180.0)
-        print(f"  pad_xy={pad.current_pad_xy_mm()}")
-        
-        # pad.move_xy_mm(0.0, 100.0)
-        
-        # arm.home()
+        mouse.move_polar(10.0, 0.0)
+        print(f"  pad_xy={mouse.current_pad_xy_mm()}")
 
-        # oversize = pad.max_radius_mm * 2.5
-        # print(f"Oversize move_polar({oversize:.1f} mm, 45 deg) with lift-home-continue…")
-        # pad.move_polar(oversize, 45.0)
-        # print(f"  pad_xy={pad.current_pad_xy_mm()}")
+        print("go_home() with lift → above home → drop…")
+        mouse.go_home()
+        print(f"  pad_xy={mouse.current_pad_xy_mm()}")
 
         print("click()…")
-        pad.click()
+        mouse.click()
         print("Arm / pad smoke test OK.")
     finally:
         arm.disconnect()

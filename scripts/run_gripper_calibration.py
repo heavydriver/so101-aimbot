@@ -28,11 +28,6 @@ def main() -> None:
         help="Print captured values without writing robot.yaml.",
     )
     parser.add_argument(
-        "--no-sync-home",
-        action="store_true",
-        help="Do not update home_joints gripper entry to the open pose.",
-    )
-    parser.add_argument(
         "--test-click",
         action="store_true",
         help="After teaching, pulse click() once to verify the range.",
@@ -47,7 +42,6 @@ def main() -> None:
             open_pos=args.open,
             closed_pos=args.closed,
             save=not args.no_save,
-            sync_home=not args.no_sync_home,
         )
         print("Taught gripper:")
         for key, value in taught.items():

@@ -50,26 +50,21 @@ def teach_pad_home(
     save: bool = True,
     robot_yaml: Path | None = None,
 ) -> dict[str, Any]:
-    """Teach home / contact Z / tip orientation from the current arm pose.
+    """Teach the current arm pose as the repeatable pad home.
 
     Robot-only: no camera. Place the mouse on the pad at the preferred rest pose,
-    then call this to write ``home_joints``, ``mouse_pad_contact_z_m``, ``z_lift_m``,
-    and ``tip_wxyz`` into ``configs/robot.yaml``.
+    then call this to write its five arm angles into ``configs/robot.yaml``.
     """
-    from so101_aimbot.control.mouse import PadMouseController
+    from so101_aimbot.control.mouse import MouseController
 
     own_arm = arm is None
     controller = arm or ArmController()
     if own_arm:
         controller.connect()
     try:
-        pad = PadMouseController(controller)
-        pad.connect(warm_up_ik=True)
-        taught = pad.teach_home_from_current()
-        taught["max_radius_mm"] = pad.max_radius_mm
-        taught["lift_clearance_m"] = pad.lift_clearance_m
-        taught["pad_x_axis"] = pad.pad_x_axis.tolist()
-        taught["pad_y_axis"] = pad.pad_y_axis.tolist()
+        mouse = MouseController(controller)
+        mouse.connect()
+        taught = mouse.teach_home_from_current()
         if save:
             path = robot_yaml or (CONFIG_DIR / "robot.yaml")
             _merge_robot_yaml(path, taught)
@@ -94,7 +89,6 @@ def teach_gripper(
     open_pos: float | None = None,
     closed_pos: float | None = None,
     save: bool = True,
-    sync_home: bool = True,
     robot_yaml: Path | None = None,
     prompt: Callable[[str], str] = input,
 ) -> dict[str, Any]:
@@ -158,18 +152,9 @@ def teach_gripper(
                 "click_hold_s": click_hold_s,
             }
         }
-        if sync_home:
-            home = list(controller._cfg.get("home_joints", [0.0] * 6))
-            if len(home) != 6:
-                home = [0.0] * 6
-            home[5] = open_val
-            taught["home_joints"] = home
-
         controller._gripper_open = open_val
         controller._gripper_closed = closed_val
         controller._cfg["gripper"] = taught["gripper"]
-        if "home_joints" in taught:
-            controller._cfg["home_joints"] = taught["home_joints"]
 
         if save:
             path = robot_yaml or (CONFIG_DIR / "robot.yaml")

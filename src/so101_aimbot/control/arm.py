@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import math
 import time
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from so101_aimbot.config import REPO_ROOT, load_config
+from so101_aimbot.config import load_config
 
 ARM_JOINT_NAMES = (
     "shoulder_pan",
@@ -37,14 +36,16 @@ class ArmController:
         self._connected = False
         self._robot: Any | None = None
         self._dry_run = bool(self._cfg.get("dry_run", True)) or not self._cfg.get("port")
-        home = self._cfg.get("home_joints", [0.0] * 6)
-        self._joints_deg = _as_float_list(home, 6, "home_joints")
+        home = self._cfg.get("home_arm_deg")
+        if home is None:
+            raise ValueError("robot config is missing home_arm_deg")
+        self._home_arm_deg = _as_float_list(home, 5, "home_arm_deg")
+        self._arm_deg = list(self._home_arm_deg)
         grip = self._cfg.get("gripper", {})
         self._gripper_open = float(grip.get("open", 40.0))
         self._gripper_closed = float(grip.get("closed", 5.0))
+        self._gripper_position = self._gripper_open
         self._click_hold_s = float(grip.get("click_hold_s", 0.12))
-        self._joint_tol_deg = float(self._cfg.get("joint_tolerance_deg", 3.0))
-        self._gripper_tol = float(self._cfg.get("gripper_tolerance", 2.0))
         self._settle_timeout_s = float(self._cfg.get("settle_timeout_s", 8.0))
         self._settle_poll_s = float(self._cfg.get("settle_poll_s", 0.02))
         self._settle_vel_tol_deg = float(self._cfg.get("settle_vel_tol_deg", 0.4))
@@ -59,9 +60,9 @@ class ArmController:
         return self._connected
 
     @property
-    def commanded_joints(self) -> list[float]:
-        """Last joint targets written to the bus (or dry-run state)."""
-        return list(self._joints_deg)
+    def commanded_arm(self) -> list[float]:
+        """Last arm targets written to the bus, in degrees."""
+        return list(self._arm_deg)
 
     def connect(self, *, calibrate: bool = False) -> None:
         """Open the serial / SDK connection, or arm the dry-run simulator."""
@@ -86,7 +87,8 @@ class ArmController:
         self._robot = SO101Follower(config)
         self._robot.connect(calibrate=calibrate)
         self._connected = True
-        self._joints_deg = self.read_joints()
+        self._arm_deg = self.read_arm()
+        self._gripper_position = self.read_gripper()
 
     def disconnect(self) -> None:
         if not self._connected:
@@ -97,78 +99,36 @@ class ArmController:
         self._connected = False
 
     def read_joints(self) -> list[float]:
-        """Return [pan, lift, elbow, wrist_flex, wrist_roll, gripper] in LeRobot units.
-
-        Arm joints are degrees; gripper is in [0, 100].
-        """
+        """Return five arm angles in degrees followed by gripper position."""
         self._require_connected()
         if self._dry_run or self._robot is None:
-            return list(self._joints_deg)
+            return [*self._arm_deg, self._gripper_position]
 
         obs = self._robot.get_observation()
         return [float(obs[f"{name}.pos"]) for name in ALL_JOINT_NAMES]
 
-    def move_joints(self, joints: Sequence[float], *, wait: bool = False) -> None:
-        """Command joint targets in LeRobot units (degrees + gripper 0–100).
+    def read_arm(self) -> list[float]:
+        return self.read_joints()[:5]
 
-        When ``wait`` is true, block until present joints are within tolerance
-        of the commanded targets (or until ``settle_timeout_s``).
-        """
+    def read_gripper(self) -> float:
+        return self.read_joints()[5]
+
+    def move_arm(self, arm_deg: Sequence[float]) -> None:
+        """Command only the five arm joints; never include the gripper."""
         self._require_connected()
-        targets = _as_float_list(joints, 6, "joints")
+        targets = _as_float_list(arm_deg, 5, "arm_deg")
         if self._dry_run or self._robot is None:
-            self._joints_deg = targets
+            self._arm_deg = targets
             return
 
-        action = {f"{name}.pos": targets[i] for i, name in enumerate(ALL_JOINT_NAMES)}
+        action = {f"{name}.pos": targets[i] for i, name in enumerate(ARM_JOINT_NAMES)}
         sent = self._robot.send_action(action)
-        self._joints_deg = [float(sent[f"{name}.pos"]) for name in ALL_JOINT_NAMES]
-        if wait:
-            self.wait_for_joints(self._joints_deg)
+        self._arm_deg = [float(sent[f"{name}.pos"]) for name in ARM_JOINT_NAMES]
 
     def resync_from_present(self) -> None:
-        """Align the commanded-joint cache with the latest proprioceptive reading."""
+        """Align the command cache with the measured arm state."""
         self._require_connected()
-        self._joints_deg = self.read_joints()
-
-    def wait_for_joints(
-        self,
-        targets: Sequence[float] | None = None,
-        *,
-        tol_deg: float | None = None,
-        gripper_tol: float | None = None,
-        timeout_s: float | None = None,
-        poll_s: float | None = None,
-    ) -> None:
-        """Block until present joints match ``targets`` (default: last commanded)."""
-        self._require_connected()
-        goal = (
-            _as_float_list(targets, 6, "targets")
-            if targets is not None
-            else list(self._joints_deg)
-        )
-        if self._dry_run or self._robot is None:
-            self._joints_deg = goal
-            return
-
-        arm_tol = self._joint_tol_deg if tol_deg is None else float(tol_deg)
-        grip_tol = self._gripper_tol if gripper_tol is None else float(gripper_tol)
-        timeout = self._settle_timeout_s if timeout_s is None else float(timeout_s)
-        poll = self._settle_poll_s if poll_s is None else float(poll_s)
-        deadline = time.perf_counter() + timeout
-        while True:
-            current = self.read_joints()
-            arm_ok = all(abs(current[i] - goal[i]) <= arm_tol for i in range(5))
-            grip_ok = abs(current[5] - goal[5]) <= grip_tol
-            if arm_ok and grip_ok:
-                return
-            if time.perf_counter() >= deadline:
-                errs = [abs(current[i] - goal[i]) for i in range(6)]
-                raise TimeoutError(
-                    f"Arm did not reach target within {timeout:.1f}s "
-                    f"(abs errors deg/[0-100]: {errs})"
-                )
-            time.sleep(poll)
+        self._arm_deg = self.read_arm()
 
     def wait_until_settled(
         self,
@@ -180,9 +140,8 @@ class ArmController:
     ) -> None:
         """Block until joint readings stop changing (motion finished).
 
-        Prefer this after Cartesian / IK-streamed moves: servos often hold a
-        few degrees of steady-state error vs the last IK setpoint, so absolute
-        ``wait_for_joints`` can hang even though the tip has arrived.
+        This is more reliable than waiting for exact servo setpoints, because
+        the physical arm can settle with a small steady-state error.
         """
         self._require_connected()
         if self._dry_run or self._robot is None:
@@ -195,11 +154,11 @@ class ArmController:
         timeout = self._settle_timeout_s if timeout_s is None else float(timeout_s)
         poll = self._settle_poll_s if poll_s is None else float(poll_s)
         deadline = time.perf_counter() + timeout
-        prev = self.read_joints()
+        prev = self.read_arm()
         stable = 0
         while True:
             time.sleep(poll)
-            cur = self.read_joints()
+            cur = self.read_arm()
             delta = max(abs(cur[i] - prev[i]) for i in range(5))
             prev = cur
             if delta <= vel_tol:
@@ -215,15 +174,24 @@ class ArmController:
                 )
 
     def home(self) -> None:
-        """Move to the configured home joint pose and wait until settled."""
-        home = self._cfg.get("home_joints", [0.0] * 6)
-        self.move_joints(_as_float_list(home, 6, "home_joints"), wait=True)
+        """Move the arm to its configured home angles."""
+        self.move_arm(self._home_arm_deg)
+        self.wait_until_settled()
 
     def set_gripper(self, position: float, *, wait: bool = True) -> None:
-        """Set gripper only; keep arm joints at their last commanded pose."""
-        joints = self.read_joints()
-        joints[5] = float(position)
-        self.move_joints(joints, wait=wait)
+        """Command only the gripper on its native 0–100 scale."""
+        self._require_connected()
+        target = float(position)
+        if not 0.0 <= target <= 100.0:
+            raise ValueError("gripper position must be between 0 and 100")
+        if self._dry_run or self._robot is None:
+            self._gripper_position = target
+            return
+
+        sent = self._robot.send_action({"gripper.pos": target})
+        self._gripper_position = float(sent["gripper.pos"])
+        if wait:
+            self._wait_for_gripper(self._gripper_position)
 
     def set_gripper_torque(self, enabled: bool) -> None:
         """Enable or disable gripper motor torque for manual positioning."""
@@ -244,24 +212,15 @@ class ArmController:
         time.sleep(hold)
         self.set_gripper(open_pos, wait=True)
 
-    def joints_deg_to_rad(self, joints_deg: Sequence[float]) -> list[float]:
-        """Convert LeRobot arm degrees (+ gripper) to radians for kinematics.
-
-        Gripper stays in [0, 100] for the bus, but PyRoki models it as revolute
-        radians. We map the normalized gripper to a small synthetic angle for FK/IK
-        continuity, then overwrite gripper after IK from the held bus value.
-        """
-        vals = _as_float_list(joints_deg, 6, "joints_deg")
-        arm_rad = [math.radians(v) for v in vals[:5]]
-        # Map gripper 0–100 → ~0–1 rad for the URDF revolute joint placeholder.
-        grip_rad = (vals[5] / 100.0) * 1.0
-        return arm_rad + [grip_rad]
-
-    def joints_rad_to_deg(self, joints_rad: Sequence[float], *, gripper_hold: float) -> list[float]:
-        """Convert PyRoki radians back to LeRobot degrees; restore held gripper."""
-        vals = _as_float_list(joints_rad, 6, "joints_rad")
-        arm_deg = [math.degrees(v) for v in vals[:5]]
-        return arm_deg + [float(gripper_hold)]
+    def _wait_for_gripper(self, target: float) -> None:
+        deadline = time.perf_counter() + self._settle_timeout_s
+        while True:
+            current = self.read_gripper()
+            if abs(current - target) <= 2.0:
+                return
+            if time.perf_counter() >= deadline:
+                raise TimeoutError("Gripper did not reach its target")
+            time.sleep(self._settle_poll_s)
 
     def _require_connected(self) -> None:
         if not self._connected:

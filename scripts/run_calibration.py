@@ -48,8 +48,6 @@ def main() -> None:
             "Mouse↔cursor calibration:\n"
             f"  px_per_mm_x={cal.px_per_mm_x}\n"
             f"  px_per_mm_y={cal.px_per_mm_y}\n"
-            "Pad teach: uv run python scripts/run_calibration.py --teach-home\n"
-            "Radius:     uv run python scripts/run_calibration.py --max-radius-mm 40"
         )
 
 

@@ -9,6 +9,7 @@ wheels/
 
 # Virtual environments
 .venv
+.pixi
 
 clips/
 outputs/
@@ -20,3 +21,6 @@ outputs/
 .idea/
 
 .DS_Store
+# pixi environments
+.pixi/*
+!.pixi/config.toml
