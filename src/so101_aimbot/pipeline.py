@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 
 from so101_aimbot.config import load_config
 from so101_aimbot.control.arm import ArmController
-from so101_aimbot.control.mouse import execute_mouse_command
+from so101_aimbot.control.mouse import MouseController
 from so101_aimbot.perception.detect import detect_cursor, detect_targets
 from so101_aimbot.perception.preprocess import find_game_corners, warp_game_region
 from so101_aimbot.perception.select import select_nearest_target
@@ -23,6 +23,7 @@ class Pipeline:
     def __init__(
         self,
         arm: ArmController | None = None,
+        mouse: MouseController | None = None,
         *,
         perception_config: dict[str, Any] | None = None,
         robot_config: dict[str, Any] | None = None,
@@ -31,7 +32,12 @@ class Pipeline:
         self.arm = arm
         self.perception_config = perception_config or load_config("perception")
         self.robot_config = robot_config or load_config("robot")
+        self.mouse = mouse or (
+            MouseController(arm, config=self.robot_config) if arm is not None else None
+        )
         self.actuate = actuate
+        if self.actuate and self.mouse is None:
+            raise ValueError("actuate=True requires an arm or mouse controller")
         self._corners: NDArray[np.float32] | None = None
 
     def perceive(self, frame: NDArray[np.uint8]) -> tuple[FrameBundle, PerceptionResult]:
@@ -59,12 +65,9 @@ class Pipeline:
     def tick(self, frame: NDArray[np.uint8]) -> MouseCommand | None:
         """Run one full pipeline tick; optionally actuate the arm."""
         _, perception = self.perceive(frame)
-        click_threshold = float(self.perception_config.get("click_threshold_px", 8.0))
-        command = plan_mouse_command(
-            perception.cursor,
-            perception.selected,
-            click_threshold_px=click_threshold,
-        )
-        if command is not None and self.actuate and self.arm is not None:
-            execute_mouse_command(self.arm, command)
+        command = plan_mouse_command(perception.cursor, perception.selected)
+        if command is not None and self.actuate and self.mouse is not None:
+            self.mouse.move_xy_mm(command.dx, command.dy)
+            if command.click:
+                self.mouse.click()
         return command

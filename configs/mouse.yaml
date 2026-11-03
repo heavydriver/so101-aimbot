@@ -1,0 +1,6 @@
+# Physical mouse settings and native game resolution. The planner converts
+# these into cursor pixels per millimetre in the warped perception frame.
+dpi: 800
+sensitivity: 1.0
+game_width: 1920
+game_height: 1080

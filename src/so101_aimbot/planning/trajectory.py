@@ -16,15 +16,12 @@ __all__ = [
 def plan_mouse_command(
     cursor: CursorState | None,
     target: Target | None,
-    *,
-    click_threshold_px: float = 8.0,
 ) -> MouseCommand | None:
-    """Plan a relative mouse move (and optional click) toward `target`."""
+    """Plan a relative mouse move and click toward `target`."""
     if cursor is None or target is None:
         return None
 
     dx_px = target.x - cursor.x
     dy_px = target.y - cursor.y
     dx_mm, dy_mm = pixel_delta_to_mouse_mm(dx_px, dy_px)
-    distance = (dx_px**2 + dy_px**2) ** 0.5
-    return MouseCommand(dx=dx_mm, dy=dy_mm, click=distance <= click_threshold_px)
+    return MouseCommand(dx=dx_mm, dy=dy_mm, click=True)

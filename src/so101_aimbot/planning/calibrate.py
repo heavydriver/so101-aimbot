@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 
-from so101_aimbot.config import CONFIG_DIR, REPO_ROOT
+from so101_aimbot.config import CONFIG_DIR, REPO_ROOT, load_config
 from so101_aimbot.control.arm import ArmController
 
 
@@ -21,17 +21,51 @@ class MouseCursorCalibration:
     px_per_mm_y: float = 1.0
 
 
-def load_calibration() -> MouseCursorCalibration:
-    """Load a saved cursor calibration (identity if missing)."""
-    path = CONFIG_DIR / "mouse_cursor_calibration.yaml"
-    if not path.is_file():
-        return MouseCursorCalibration()
-    with path.open() as f:
-        data = yaml.safe_load(f) or {}
-    return MouseCursorCalibration(
-        px_per_mm_x=float(data.get("px_per_mm_x", 1.0)),
-        px_per_mm_y=float(data.get("px_per_mm_y", 1.0)),
+def px_per_mm_warped(
+    dpi: float,
+    sensitivity: float,
+    game_pixels: int,
+    warp_pixels: int,
+) -> float:
+    """Calculate cursor pixels per pad millimetre in one warped-frame axis."""
+    if dpi <= 0.0:
+        raise ValueError("dpi must be positive")
+    if sensitivity <= 0.0:
+        raise ValueError("sensitivity must be positive")
+    if game_pixels <= 0:
+        raise ValueError("game_pixels must be positive")
+    if warp_pixels <= 0:
+        raise ValueError("warp_pixels must be positive")
+    return (float(dpi) / 25.4) * float(sensitivity) * (
+        float(warp_pixels) / float(game_pixels)
     )
+
+
+def load_mouse_calibration() -> MouseCursorCalibration:
+    """Build the mouse-to-cursor scale from mouse and perception configs."""
+    mouse = load_config("mouse")
+    perception = load_config("perception")
+    dpi = float(mouse["dpi"])
+    sensitivity = float(mouse["sensitivity"])
+    return MouseCursorCalibration(
+        px_per_mm_x=px_per_mm_warped(
+            dpi,
+            sensitivity,
+            int(mouse["game_width"]),
+            int(perception["warp_width"]),
+        ),
+        px_per_mm_y=px_per_mm_warped(
+            dpi,
+            sensitivity,
+            int(mouse["game_height"]),
+            int(perception["warp_height"]),
+        ),
+    )
+
+
+def load_calibration() -> MouseCursorCalibration:
+    """Compatibility alias for the config-derived mouse calibration."""
+    return load_mouse_calibration()
 
 
 def pixel_delta_to_mouse_mm(
