@@ -4,24 +4,20 @@ An SO-101 arm plays Gridshot. Each frame goes through perception (find the scree
 
 ## Setup
 
-Requires [Pixi](https://pixi.prefix.dev/latest/). Python 3.12 and dependencies are defined in `pyproject.toml` and locked in `pixi.lock`.
+Requires [Pixi](https://pixi.prefix.dev/latest/)
 
 ```bash
 pixi install
-pixi install -e dev   # includes pytest
 ```
-
-That installs environments under `.pixi/envs/` and the local package in editable mode.
 
 The frame source is `configs/camera.yaml`. It defaults to a recorded clip (`clips/clip-1.mp4`). Set `source: webcam` to use a live camera.
 
-## Run
+Update `port` and `robot_id` in `configs/robot.yaml`
 
-Full loop. Prints planned mouse commands and does not move the arm. Press `q` to quit.
+## Run
 
 ```bash
 pixi run main
-# or: pixi run python main.py
 ```
 
 ## Components
@@ -30,10 +26,9 @@ Perception viewer. Shows the raw camera and a warped overlay of targets and the 
 
 ```bash
 pixi run perception
-# or: pixi run python scripts/run_perception.py
 ```
 
-Pad teach / calibration (robot-only, no camera). Teach home from the current pose, or set max radius:
+Robot calibration - teach home from the current pose, or set max radius:
 
 ```bash
 pixi run python scripts/run_calibration.py --teach-home
