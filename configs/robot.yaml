@@ -1,27 +1,35 @@
 port: /dev/ttyACM0
 dry_run: false
 robot_id: team-11
-
 urdf_path: assets/so101/so101_new_calib.urdf
 target_frame: gripper_frame_link
 home_arm_deg:
-  - -0.9231
-  - 35.8242
-  - 54.5055
-  - -82.9451
-  - -1.6264
-
+- -0.6593406593406593
+- 31.692307692307693
+- 67.6923076923077
+- -88.57142857142857
+- -2.4175824175824174
 max_radius_mm: 120.0
 lift_mm: 50.0
 position_tolerance_mm: 0.8
-
 motion:
   dt_s: 0.01
-  max_velocity_deg_s: [60.0, 60.0, 90.0, 90.0]
-  max_acceleration_deg_s2: [180.0, 180.0, 270.0, 270.0]
-  max_jerk_deg_s3: [720.0, 720.0, 1080.0, 1080.0]
-
+  max_velocity_deg_s:
+  - 60.0
+  - 60.0
+  - 90.0
+  - 90.0
+  max_acceleration_deg_s2:
+  - 180.0
+  - 180.0
+  - 270.0
+  - 270.0
+  max_jerk_deg_s3:
+  - 720.0
+  - 720.0
+  - 1080.0
+  - 1080.0
 gripper:
-  open: 10.7857
-  closed: 0.35
+  open: 19.5
+  closed: 1.3571428571428572
   click_hold_s: 0.25

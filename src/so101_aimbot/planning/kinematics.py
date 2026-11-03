@@ -84,18 +84,12 @@ class So101Kinematics:
         position_mm: Sequence[float],
         *,
         initial_deg: Sequence[float],
-        preferred_rotation: NDArray[np.float64] | None = None,
         tolerance_mm: float = 0.5,
         max_iterations: int = 200,
     ) -> list[float]:
-        """Solve position IK, softly preferring the supplied orientation."""
+        """Solve position-only IK, allowing the end effector to rotate freely."""
         target = _vector(position_mm, 3, "position_mm") / 1000.0
         q = self._configuration(initial_deg)
-        preferred = (
-            self.home_pose.rotation
-            if preferred_rotation is None
-            else np.asarray(preferred_rotation, dtype=float).reshape(3, 3)
-        )
 
         for _ in range(max_iterations):
             pin.framesForwardKinematics(self.model, self.data, q)
@@ -111,19 +105,11 @@ class So101Kinematics:
                 self._frame_id,
                 pin.ReferenceFrame.LOCAL_WORLD_ALIGNED,
             )
-            rotation_error = pose.rotation @ pin.log3(pose.rotation.T @ preferred)
-
-            # Millimetres make translation dominate this soft preference.
-            orientation_weight = 0.1
-            system = np.vstack(
-                (jacobian[:3] * 1000.0, jacobian[3:] * orientation_weight)
-            )
-            error = np.concatenate(
-                (position_error * 1000.0, rotation_error * orientation_weight)
-            )
+            system = jacobian[:3] * 1000.0
+            error = position_error * 1000.0
             damping = 1e-4
             step = system.T @ np.linalg.solve(
-                system @ system.T + damping * np.eye(6), error
+                system @ system.T + damping * np.eye(3), error
             )
             q = pin.integrate(self.model, q, 0.6 * step)
             q = np.clip(q, self.model.lowerPositionLimit, self.model.upperPositionLimit)

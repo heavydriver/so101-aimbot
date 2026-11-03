@@ -25,14 +25,26 @@ def main() -> None:
             f"home_pad_xy={mouse.current_pad_xy_mm()} "
             f"max_radius_mm={mouse.max_radius_mm}"
         )
+        
+        # print("go_home() with lift → above home → drop…")
+        # mouse.go_home()
+        # print(f"  pad_xy={mouse.current_pad_xy_mm()}")
 
         print("Short move_polar(10 mm, 0 deg)…")
-        mouse.move_polar(10.0, 0.0)
+        mouse.move_polar(10.0, 180.0)
+        print(f"  pad_xy={mouse.current_pad_xy_mm()}")
+        
+        mouse.move_polar(50.0, 90.0)
+        print(f"  pad_xy={mouse.current_pad_xy_mm()}")
+        
+        mouse.move_polar(30.0, -45.0)
         print(f"  pad_xy={mouse.current_pad_xy_mm()}")
 
-        print("go_home() with lift → above home → drop…")
-        mouse.go_home()
+        mouse.move_polar(80.0, 230.0)
         print(f"  pad_xy={mouse.current_pad_xy_mm()}")
+        
+        # mouse.move_xy_mm(-50.0, -20.0)
+        # print(f"  pad_xy={mouse.current_pad_xy_mm()}")
 
         print("click()…")
         mouse.click()

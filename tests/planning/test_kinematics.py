@@ -34,3 +34,17 @@ def test_fk_ik_reaches_nearby_target() -> None:
     assert np.linalg.norm(reached - target) <= 0.5
     assert np.all(solution >= kinematics.lower_deg)
     assert np.all(solution <= kinematics.upper_deg)
+
+
+def test_fk_ik_reaches_backward_target_without_orientation_constraint() -> None:
+    kinematics = _kinematics()
+    target = kinematics.home_pose.position_mm + np.array([-50.0, -20.0, 0.0])
+
+    solution = kinematics.inverse(
+        target,
+        initial_deg=kinematics.home_active_deg,
+        tolerance_mm=0.8,
+    )
+    reached = kinematics.forward(solution).position_mm
+
+    assert np.linalg.norm(reached - target) <= 0.8
