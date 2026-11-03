@@ -10,11 +10,12 @@ from numpy.typing import NDArray
 
 @dataclass(frozen=True, slots=True)
 class Target:
-    """A detected Gridshot target in ROI/screen pixel coordinates."""
+    """A detected circular target in ROI/screen pixel coordinates."""
 
     x: float
     y: float
     confidence: float = 1.0
+    radius_px: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)

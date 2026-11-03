@@ -14,7 +14,7 @@ The frame source is `configs/camera.yaml`. It defaults to a recorded clip (`clip
 
 Update `port` and `robot_id` in `configs/robot.yaml`
 
-Set the physical mouse `dpi`, in-game `sensitivity`, and native game
+Set the mouse sensor `cpi`, in-game `sensitivity`, and native game
 resolution in `configs/mouse.yaml`. The planner uses them with the perception
 warp size to convert cursor pixel errors into mouse-pad millimetres.
 

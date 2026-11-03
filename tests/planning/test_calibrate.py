@@ -11,14 +11,14 @@ from so101_aimbot.planning.calibrate import (
 )
 
 
-def test_px_per_mm_warped_scales_to_perception_resolution() -> None:
+def test_px_per_mm_warped_uses_cpi_and_sensitivity() -> None:
     scale = px_per_mm_warped(
-        dpi=800,
+        cpi=800,
         sensitivity=1.0,
         game_pixels=1920,
         warp_pixels=960,
     )
-    assert scale == pytest.approx((800 / 25.4) * 0.5)
+    assert scale == pytest.approx(800 / 25.4)
 
 
 def test_pixel_delta_to_mouse_mm_uses_axis_scales() -> None:
@@ -31,7 +31,7 @@ def test_pixel_delta_to_mouse_mm_uses_axis_scales() -> None:
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("dpi", 0),
+        ("cpi", 0),
         ("sensitivity", 0),
         ("game_pixels", 0),
         ("warp_pixels", 0),
@@ -41,7 +41,7 @@ def test_px_per_mm_warped_rejects_non_positive_inputs(
     field: str, value: float
 ) -> None:
     kwargs: dict[str, float | int] = {
-        "dpi": 800,
+        "cpi": 800,
         "sensitivity": 1.0,
         "game_pixels": 1920,
         "warp_pixels": 960,

@@ -22,21 +22,21 @@ class MouseCursorCalibration:
 
 
 def px_per_mm_warped(
-    dpi: float,
+    cpi: float,
     sensitivity: float,
     game_pixels: int,
     warp_pixels: int,
 ) -> float:
     """Calculate cursor pixels per pad millimetre in one warped-frame axis."""
-    if dpi <= 0.0:
-        raise ValueError("dpi must be positive")
+    if cpi <= 0.0:
+        raise ValueError("cpi must be positive")
     if sensitivity <= 0.0:
         raise ValueError("sensitivity must be positive")
     if game_pixels <= 0:
         raise ValueError("game_pixels must be positive")
     if warp_pixels <= 0:
         raise ValueError("warp_pixels must be positive")
-    return (float(dpi) / 25.4) * float(sensitivity) * (
+    return (float(cpi) / 25.4) * float(sensitivity) * (
         float(warp_pixels) / float(game_pixels)
     )
 
@@ -45,17 +45,20 @@ def load_mouse_calibration() -> MouseCursorCalibration:
     """Build the mouse-to-cursor scale from mouse and perception configs."""
     mouse = load_config("mouse")
     perception = load_config("perception")
-    dpi = float(mouse["dpi"])
+    # "DPI" is retained as a compatibility fallback for older config files.
+    cpi = float(mouse.get("cpi", mouse.get("dpi", 0.0)))
+    if cpi <= 0.0:
+        raise ValueError("mouse config must contain a positive cpi")
     sensitivity = float(mouse["sensitivity"])
     return MouseCursorCalibration(
         px_per_mm_x=px_per_mm_warped(
-            dpi,
+            cpi,
             sensitivity,
             int(mouse["game_width"]),
             int(perception["warp_width"]),
         ),
         px_per_mm_y=px_per_mm_warped(
-            dpi,
+            cpi,
             sensitivity,
             int(mouse["game_height"]),
             int(perception["warp_height"]),

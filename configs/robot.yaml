@@ -1,14 +1,14 @@
-port: /dev/ttyACM0
+port: COM8
 dry_run: false
 robot_id: team-11
 urdf_path: assets/so101/so101_new_calib.urdf
 target_frame: gripper_frame_link
 home_arm_deg:
-- -0.6593406593406593
-- 31.692307692307693
-- 67.6923076923077
-- -88.57142857142857
-- -2.4175824175824174
+- 4.483516483516484
+- 34.72527472527472
+- 68.74725274725274
+- -95.12087912087912
+- -0.21978021978021978
 max_radius_mm: 120.0
 lift_mm: 50.0
 position_tolerance_mm: 0.8
@@ -32,7 +32,7 @@ motion:
 gripper:
   open: 19.5
   closed: 1.3571428571428572
-  click_hold_s: 0.25
+  click_hold_s: 0.1
 pid:
   enabled: true
   arm:

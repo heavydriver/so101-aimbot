@@ -38,6 +38,7 @@ def test_detect_targets_finds_three_magenta_circles() -> None:
     found = {(round(t.x), round(t.y)) for t in targets}
     for x, y in centers:
         assert any(abs(fx - x) <= 4 and abs(fy - y) <= 4 for fx, fy in found)
+    assert all(14.0 <= target.radius_px <= 22.0 for target in targets)
 
 
 def test_detect_targets_ignores_small_noise() -> None:

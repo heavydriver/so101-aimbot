@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "lerobot[feetech]>=0.6.0",
-    "opencv-python>=5.0.0.93",
+    "opencv-python>=5.0.0",
     "pyyaml>=6.0",
     "ruckig>=0.19.4",
     "numpy>=2.0,<2.3"

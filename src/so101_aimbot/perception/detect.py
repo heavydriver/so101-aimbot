@@ -80,7 +80,12 @@ def detect_targets(
 
     expected = max(max_radius, 1.0)
     return [
-        Target(x=x, y=y, confidence=float(np.clip(radius / expected, 0.0, 1.0)))
+        Target(
+            x=x,
+            y=y,
+            confidence=float(np.clip(radius / expected, 0.0, 1.0)),
+            radius_px=radius,
+        )
         for radius, x, y in kept
     ]
 
