@@ -4,22 +4,24 @@ An SO-101 arm plays Gridshot. Each frame goes through perception (find the scree
 
 ## Setup
 
-Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
+Requires [Pixi](https://pixi.prefix.dev/latest/)
 
 ```bash
-uv sync
+pixi install
 ```
-
-That creates `.venv` and installs the package plus dev tools (`pytest`).
 
 The frame source is `configs/camera.yaml`. It defaults to a recorded clip (`clips/clip-1.mp4`). Set `source: webcam` to use a live camera.
 
+Update `port` and `robot_id` in `configs/robot.yaml`
+
+Set the mouse sensor `cpi`, in-game `sensitivity`, and native game
+resolution in `configs/mouse.yaml`. The planner uses them with the perception
+warp size to convert cursor pixel errors into mouse-pad millimetres.
+
 ## Run
 
-Full loop. Prints planned mouse commands and does not move the arm. Press `q` to quit.
-
 ```bash
-uv run python main.py
+pixi run main
 ```
 
 ## Components
@@ -27,25 +29,37 @@ uv run python main.py
 Perception viewer. Shows the raw camera and a warped overlay of targets and the cursor. Press `q` to quit.
 
 ```bash
-uv run python scripts/run_perception.py
+pixi run perception
 ```
 
-Mouse-to-cursor calibration. Prints the current scale from pad millimeters to screen pixels.
+Robot calibration - teach home from the current pose, or set max radius:
 
 ```bash
-uv run python scripts/run_calibration.py
+pixi run python scripts/run_calibration.py --teach-home
+pixi run python scripts/run_calibration.py --max-radius-mm 40
 ```
 
-Arm smoke test. Connects, homes, and disconnects.
+Gripper open / closed calibration. Disables gripper torque so you can move it by hand, then writes `gripper.open` / `gripper.closed` into `configs/robot.yaml`:
 
 ```bash
-uv run python scripts/run_arm_smoke.py
+pixi run python scripts/run_gripper_calibration.py
+pixi run python scripts/run_gripper_calibration.py --test-click
+pixi run python scripts/run_gripper_calibration.py --open 70 --closed 5
 ```
+
+Arm / pad smoke test (dry-run by default). Short `move_polar`, oversize move with lift→home→continue, then `click`.
+
+```bash
+pixi run python scripts/run_arm_smoke.py
+```
+
+Set `port` and `dry_run: false` in `configs/robot.yaml` to talk to a real SO-101.
 
 Tests:
 
 ```bash
-uv run pytest
-uv run pytest tests/perception
-uv run pytest tests/planning
+pixi run test
+pixi run -e dev pytest tests/perception
+pixi run -e dev pytest tests/planning
+pixi run -e dev pytest tests/control
 ```

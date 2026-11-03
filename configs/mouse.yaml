@@ -1,0 +1,6 @@
+# Mouse sensor counts per inch and native game resolution. The planner converts
+# these into cursor pixels per millimetre in the warped perception frame.
+cpi: 800
+sensitivity: 0.1
+game_width: 960
+game_height: 540

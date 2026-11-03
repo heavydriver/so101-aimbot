@@ -63,6 +63,19 @@ class Camera:
                 raise RuntimeError(f"Could not read frame from {self._label}")
         return frame
 
+    def read_latest(self, *, drain: int = 8) -> NDArray[np.uint8]:
+        """Return the newest frame, discarding buffered ones first.
+
+        Webcam drivers queue several frames. After a long blocking move/click,
+        a plain ``read()`` can return an image captured mid-motion. Drain the
+        queue so the next shot is planned from the post-click game state.
+        """
+        if self.source == "webcam":
+            for _ in range(max(0, drain)):
+                if not self.cap.grab():
+                    break
+        return self.read()
+
     def release(self) -> None:
         self.cap.release()
 

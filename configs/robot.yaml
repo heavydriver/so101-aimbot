@@ -1,6 +1,69 @@
-# SO-101 and mouse-attachment parameters (filled in as hardware is calibrated).
-home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-joint_limits_rad:
-  min: [-3.14, -3.14, -3.14, -3.14, -3.14, -3.14]
-  max: [3.14, 3.14, 3.14, 3.14, 3.14, 3.14]
-mouse_pad_contact_z_m: 0.0
+port: COM8
+dry_run: false
+robot_id: team-11
+urdf_path: assets/so101/so101_new_calib.urdf
+target_frame: gripper_frame_link
+home_arm_deg:
+- 4.483516483516484
+- 34.72527472527472
+- 68.74725274725274
+- -95.12087912087912
+- -0.21978021978021978
+max_radius_mm: 120.0
+lift_mm: 50.0
+position_tolerance_mm: 0.8
+motion:
+  dt_s: 0.01
+  max_velocity_deg_s:
+  - 60.0
+  - 60.0
+  - 90.0
+  - 90.0
+  max_acceleration_deg_s2:
+  - 180.0
+  - 180.0
+  - 270.0
+  - 270.0
+  max_jerk_deg_s3:
+  - 720.0
+  - 720.0
+  - 1080.0
+  - 1080.0
+gripper:
+  open: 19.5
+  closed: 1.3571428571428572
+  click_hold_s: 0.1
+pid:
+  enabled: true
+  arm:
+    kp:
+    - 1.5
+    - 1.5
+    - 0.05
+    - 0.0
+    - 0.0
+    ki:
+    - 0.0
+    - 0.1
+    - 0.0
+    - 0.0
+    - 0.0
+    kd:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    output_clamp_deg: 3.0
+    i_clamp_deg: 5.0
+  gripper:
+    kp: 0.0
+    ki: 0.0
+    kd: 0.0
+    output_clamp: 5.0
+    tolerance: 2.0
+  cal:
+    step_deg: 4.0
+    gripper_step: 8.0
+    duration_s: 2.0
+    poll_s: 0.02

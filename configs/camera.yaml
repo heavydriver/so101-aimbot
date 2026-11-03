@@ -1,6 +1,6 @@
 # Frame source for perception. Use "clip" for offline CV; "webcam" for live.
-source: clip
+source: webcam
 index: 0
-width: 640
-height: 480
+width: 1280
+height: 720
 clip_path: clips/clip-2.mp4

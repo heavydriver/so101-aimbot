@@ -46,7 +46,9 @@ def _draw_result(frame: np.ndarray, result: PerceptionResult) -> np.ndarray:
     label = f"targets {len(result.targets)}"
     if result.cursor is not None:
         label += f"  cursor ({result.cursor.x:.0f}, {result.cursor.y:.0f})"
-    cv2.putText(view, label, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    cv2.putText(
+        view, label, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2
+    )
     return view
 
 
