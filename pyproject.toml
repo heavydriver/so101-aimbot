@@ -5,7 +5,7 @@ description = "SO-101 robotic arm playing Gridshot via perception â†’ planning â
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "lerobot[feetech]>=0.4.4",
+    "lerobot[feetech]>=0.6.0",
     "opencv-python>=5.0.0.93",
     "pyyaml>=6.0",
     "ruckig>=0.19.4",
@@ -31,9 +31,11 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 [tool.pixi.dependencies]
 python = "3.12.*"
 pinocchio = ">=4.1.0,<5"
+pytest = ">=9.2.0,<10"
 
 [tool.pixi.constraints]
 numpy = ">=2.0,<2.3"
+packaging = ">=24.2,<26.0"
 
 [tool.pixi.pypi-dependencies]
 so101-aimbot = { path = ".", editable = true }
