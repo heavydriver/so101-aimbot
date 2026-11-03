@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from so101_aimbot.config import load_config
+from so101_aimbot.control.pid import PID, PIDBank, PIDGains
 
 ARM_JOINT_NAMES = (
     "shoulder_pan",
@@ -50,6 +51,24 @@ class ArmController:
         self._settle_poll_s = float(self._cfg.get("settle_poll_s", 0.02))
         self._settle_vel_tol_deg = float(self._cfg.get("settle_vel_tol_deg", 0.4))
         self._settle_stable_reads = int(self._cfg.get("settle_stable_reads", 3))
+        pid_cfg = dict(self._cfg.get("pid", {}) or {})
+        self._pid_enabled = bool(pid_cfg.get("enabled", False))
+        arm_pid = dict(pid_cfg.get("arm", {}) or {})
+        grip_pid = dict(pid_cfg.get("gripper", {}) or {})
+        self._arm_pid = PIDBank.from_config(arm_pid, 5)
+        self._gripper_pid = PID(
+            PIDGains(
+                float(grip_pid.get("kp", 0.0)),
+                float(grip_pid.get("ki", 0.0)),
+                float(grip_pid.get("kd", 0.0)),
+            ),
+            i_clamp=float(grip_pid["i_clamp"])
+            if grip_pid.get("i_clamp") is not None
+            else None,
+            output_clamp=float(grip_pid.get("output_clamp", 5.0)),
+        )
+        self._gripper_pid_tolerance = float(grip_pid.get("tolerance", 2.0))
+        self._last_arm_cmd_time: float | None = None
 
     @property
     def dry_run(self) -> bool:
@@ -87,6 +106,7 @@ class ArmController:
         self._robot = SO101Follower(config)
         self._robot.connect(calibrate=calibrate)
         self._connected = True
+        self._reset_pid()
         self._arm_deg = self.read_arm()
         self._gripper_position = self.read_gripper()
 
@@ -121,13 +141,32 @@ class ArmController:
             self._arm_deg = targets
             return
 
-        action = {f"{name}.pos": targets[i] for i, name in enumerate(ARM_JOINT_NAMES)}
+        send_targets = targets
+        if self._pid_enabled:
+            now = time.perf_counter()
+            dt_s = (
+                now - self._last_arm_cmd_time
+                if self._last_arm_cmd_time is not None
+                else self._settle_poll_s
+            )
+            self._last_arm_cmd_time = now
+            measured = self.read_arm()
+            errors = [targets[i] - measured[i] for i in range(5)]
+            corrections = self._arm_pid.update(errors, dt_s)
+            send_targets = [
+                targets[i] + corrections[i] for i in range(5)
+            ]
+
+        action = {
+            f"{name}.pos": send_targets[i] for i, name in enumerate(ARM_JOINT_NAMES)
+        }
         sent = self._robot.send_action(action)
         self._arm_deg = [float(sent[f"{name}.pos"]) for name in ARM_JOINT_NAMES]
 
     def resync_from_present(self) -> None:
         """Align the command cache with the measured arm state."""
         self._require_connected()
+        self._reset_pid()
         self._arm_deg = self.read_arm()
 
     def wait_until_settled(
@@ -175,6 +214,7 @@ class ArmController:
 
     def home(self) -> None:
         """Move the arm to its configured home angles."""
+        self._reset_pid()
         self.move_arm(self._home_arm_deg)
         self.wait_until_settled()
 
@@ -186,6 +226,11 @@ class ArmController:
             raise ValueError("gripper position must be between 0 and 100")
         if self._dry_run or self._robot is None:
             self._gripper_position = target
+            return
+
+        if self._pid_enabled and wait:
+            self._gripper_pid.reset()
+            self._wait_for_gripper_pid(target)
             return
 
         sent = self._robot.send_action({"gripper.pos": target})
@@ -213,14 +258,42 @@ class ArmController:
         self.set_gripper(open_pos, wait=True)
 
     def _wait_for_gripper(self, target: float) -> None:
+        tol = self._gripper_pid_tolerance
         deadline = time.perf_counter() + self._settle_timeout_s
         while True:
             current = self.read_gripper()
-            if abs(current - target) <= 2.0:
+            if abs(current - target) <= tol:
+                self._gripper_position = current
                 return
             if time.perf_counter() >= deadline:
                 raise TimeoutError("Gripper did not reach its target")
             time.sleep(self._settle_poll_s)
+
+    def _wait_for_gripper_pid(self, target: float) -> None:
+        tol = self._gripper_pid_tolerance
+        deadline = time.perf_counter() + self._settle_timeout_s
+        prev_t = time.perf_counter()
+        while True:
+            current = self.read_gripper()
+            error = target - current
+            if abs(error) <= tol:
+                self._gripper_position = current
+                return
+            if time.perf_counter() >= deadline:
+                raise TimeoutError("Gripper did not reach its target")
+            now = time.perf_counter()
+            dt_s = now - prev_t
+            prev_t = now
+            correction = self._gripper_pid.update(error, dt_s)
+            cmd = max(0.0, min(100.0, target + correction))
+            sent = self._robot.send_action({"gripper.pos": cmd})
+            self._gripper_position = float(sent["gripper.pos"])
+            time.sleep(self._settle_poll_s)
+
+    def _reset_pid(self) -> None:
+        self._arm_pid.reset()
+        self._gripper_pid.reset()
+        self._last_arm_cmd_time = None
 
     def _require_connected(self) -> None:
         if not self._connected:
